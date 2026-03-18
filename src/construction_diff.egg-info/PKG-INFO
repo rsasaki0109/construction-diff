@@ -1,0 +1,53 @@
+Metadata-Version: 2.4
+Name: construction-diff
+Version: 0.1.0
+Summary: Detect construction progress by comparing point cloud scans over time
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: open3d>=0.17
+Requires-Dist: numpy>=1.24
+Requires-Dist: click>=8.1
+Requires-Dist: matplotlib>=3.7
+Requires-Dist: scipy>=1.10
+
+# construction-diff
+
+Detect construction progress by comparing point cloud scans over time. Designed for the [Rohbau3D](https://github.com/Photogrammetry-Bonn/Rohbau3D) dataset format.
+
+## Features
+
+- Load Rohbau3D `.npy` scans (`coord.npy`, `color.npy`, `intensity.npy`, `normal.npy`)
+- Global registration (FPFH + RANSAC) with ICP refinement using Open3D
+- Diff computation via KD-tree nearest-neighbour distance thresholding
+- Colour-coded visualisation: new (green), removed (red), unchanged (grey)
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+## Usage
+
+### Align two scans
+
+```bash
+construction-diff align /path/to/scan_t0 /path/to/scan_t1 -o transform.npy
+```
+
+### Compute difference
+
+```bash
+construction-diff diff /path/to/scan_t0 /path/to/scan_t1 -t transform.npy -o diff.npz
+```
+
+### Generate report
+
+```bash
+construction-diff report /path/to/scan_t0 /path/to/scan_t1 -o report.png
+```
+
+## License
+
+MIT
