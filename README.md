@@ -1,6 +1,59 @@
 # construction-diff
 
+[![CI](https://github.com/MapIV/construction-diff/actions/workflows/ci.yml/badge.svg)](https://github.com/MapIV/construction-diff/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Detect construction progress by comparing point cloud scans over time. Designed for the [Rohbau3D](https://github.com/Photogrammetry-Bonn/Rohbau3D) dataset format.
+
+## Pipeline
+
+```
+ Scan t0 (.npy)     Scan t1 (.npy)
+      |                   |
+      v                   v
+  load_scan()         load_scan()
+      |                   |
+      +-------+   +-------+
+              |   |
+              v   v
+    FPFH + RANSAC Global Registration
+              |
+              v
+        ICP Refinement (point-to-plane)
+              |
+              v
+     4x4 Transformation Matrix
+              |
+              v
+    KDTree Nearest-Neighbour Diff
+              |
+              v
+   New / Removed / Unchanged classification
+              |
+              v
+   Colour-coded Visualisation (report)
+```
+
+1. **Load** -- Read Rohbau3D `.npy` scan directories (`coord.npy`, `color.npy`, `intensity.npy`, `normal.npy`) into Open3D point clouds.
+2. **Global Registration** -- Downsample with voxel grid, compute FPFH features, and match with RANSAC to find a coarse alignment.
+3. **ICP Refinement** -- Refine the coarse alignment using point-to-plane ICP for sub-voxel accuracy.
+4. **Diff Computation** -- Build KD-trees for both clouds and classify every point by nearest-neighbour distance:
+   - **New** (green): points in the later scan with no close match in the earlier scan.
+   - **Removed** (red): points in the earlier scan with no close match in the later scan.
+   - **Unchanged** (grey): points that appear in both scans within the distance threshold.
+5. **Visualisation** -- Generate a colour-coded report image (top-down XY and side XZ views) or launch the Open3D interactive viewer.
+
+## Visualization Example
+
+The `report` command produces a two-panel matplotlib figure:
+
+| Panel | View | Description |
+|-------|------|-------------|
+| Left  | Top-down (XY) | Bird's-eye view showing spatial extent of changes |
+| Right | Side view (XZ) | Elevation view showing vertical construction progress |
+
+Points are colour-coded: **green** = new construction, **red** = removed/demolished, **grey** = unchanged.
 
 ## Features
 
@@ -8,6 +61,7 @@ Detect construction progress by comparing point cloud scans over time. Designed 
 - Global registration (FPFH + RANSAC) with ICP refinement using Open3D
 - Diff computation via KD-tree nearest-neighbour distance thresholding
 - Colour-coded visualisation: new (green), removed (red), unchanged (grey)
+- CLI with three subcommands: `align`, `diff`, `report`
 
 ## Installation
 
@@ -33,6 +87,15 @@ construction-diff diff /path/to/scan_t0 /path/to/scan_t1 -t transform.npy -o dif
 
 ```bash
 construction-diff report /path/to/scan_t0 /path/to/scan_t1 -o report.png
+```
+
+## Development
+
+### Running tests
+
+```bash
+pip install pytest
+pytest tests/ -v
 ```
 
 ## License
