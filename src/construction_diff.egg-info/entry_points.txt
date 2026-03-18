@@ -1,0 +1,2 @@
+[console_scripts]
+construction-diff = construction_diff.cli:cli

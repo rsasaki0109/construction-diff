@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "construction-diff"
+version = "0.1.0"
+description = "Detect construction progress by comparing point cloud scans over time"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "open3d>=0.17",
+    "numpy>=1.24",
+    "click>=8.1",
+    "matplotlib>=3.7",
+    "scipy>=1.10",
+]
+
+[project.scripts]
+construction-diff = "construction_diff.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
