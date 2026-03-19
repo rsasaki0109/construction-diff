@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import click
 import numpy as np
 
 from construction_diff.loader import load_scan
-from construction_diff.registration import register_scans
+from construction_diff.registration import register_scans, register_scans_multiscale
 from construction_diff.diff import compute_diff
 from construction_diff.visualization import visualize_diff
 
@@ -17,6 +18,18 @@ from construction_diff.visualization import visualize_diff
 @click.version_option()
 def cli() -> None:
     """Detect construction progress by comparing point cloud scans."""
+
+
+def _run_registration(
+    src_pcd, tgt_pcd, *, multi_scale: bool, voxel_size: float, verbose: bool = False
+):
+    """Run registration with chosen strategy and return the result."""
+    if verbose:
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    if multi_scale:
+        return register_scans_multiscale(src_pcd, tgt_pcd)
+    return register_scans(src_pcd, tgt_pcd, voxel_size=voxel_size)
 
 
 @cli.command()
@@ -36,7 +49,21 @@ def cli() -> None:
     show_default=True,
     help="Voxel size for downsampling during registration.",
 )
-def align(source: Path, target: Path, output: Path | None, voxel_size: float) -> None:
+@click.option(
+    "--multi-scale",
+    is_flag=True,
+    default=False,
+    help="Use multi-scale registration (coarse-to-fine FPFH + ICP).",
+)
+@click.option("-v", "--verbose", is_flag=True, default=False, help="Verbose output.")
+def align(
+    source: Path,
+    target: Path,
+    output: Path | None,
+    voxel_size: float,
+    multi_scale: bool,
+    verbose: bool,
+) -> None:
     """Register two scans using global + ICP refinement.
 
     SOURCE and TARGET are directories containing Rohbau3D .npy files.
@@ -44,7 +71,9 @@ def align(source: Path, target: Path, output: Path | None, voxel_size: float) ->
     src_pcd = load_scan(source)
     tgt_pcd = load_scan(target)
 
-    result = register_scans(src_pcd, tgt_pcd, voxel_size=voxel_size)
+    result = _run_registration(
+        src_pcd, tgt_pcd, multi_scale=multi_scale, voxel_size=voxel_size, verbose=verbose
+    )
 
     click.echo(f"Fitness:  {result.fitness:.4f}")
     click.echo(f"RMSE:     {result.inlier_rmse:.6f}")
@@ -82,6 +111,12 @@ def align(source: Path, target: Path, output: Path | None, voxel_size: float) ->
     help="Voxel size for downsampling during registration.",
 )
 @click.option(
+    "--multi-scale",
+    is_flag=True,
+    default=False,
+    help="Use multi-scale registration (coarse-to-fine FPFH + ICP).",
+)
+@click.option(
     "-o",
     "--output",
     type=click.Path(path_type=Path),
@@ -94,6 +129,7 @@ def diff(
     transform: Path | None,
     threshold: float,
     voxel_size: float,
+    multi_scale: bool,
     output: Path | None,
 ) -> None:
     """Compute the difference between two scans.
@@ -107,7 +143,9 @@ def diff(
         transformation = np.load(transform)
     else:
         click.echo("No transform provided, running registration...")
-        reg = register_scans(src_pcd, tgt_pcd, voxel_size=voxel_size)
+        reg = _run_registration(
+            src_pcd, tgt_pcd, multi_scale=multi_scale, voxel_size=voxel_size
+        )
         transformation = reg.transformation
         click.echo(f"Registration fitness: {reg.fitness:.4f}")
 
@@ -153,6 +191,12 @@ def diff(
     help="Voxel size for registration downsampling.",
 )
 @click.option(
+    "--multi-scale",
+    is_flag=True,
+    default=False,
+    help="Use multi-scale registration (coarse-to-fine FPFH + ICP).",
+)
+@click.option(
     "-o",
     "--output",
     type=click.Path(path_type=Path),
@@ -165,6 +209,7 @@ def report(
     transform: Path | None,
     threshold: float,
     voxel_size: float,
+    multi_scale: bool,
     output: Path | None,
 ) -> None:
     """Generate a visual progress report comparing two scans.
@@ -178,7 +223,9 @@ def report(
         transformation = np.load(transform)
     else:
         click.echo("Running registration...")
-        reg = register_scans(src_pcd, tgt_pcd, voxel_size=voxel_size)
+        reg = _run_registration(
+            src_pcd, tgt_pcd, multi_scale=multi_scale, voxel_size=voxel_size
+        )
         transformation = reg.transformation
 
     result = compute_diff(src_pcd, tgt_pcd, transformation, threshold=threshold)
