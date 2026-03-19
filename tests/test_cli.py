@@ -146,3 +146,57 @@ class TestCLI:
         runner = CliRunner()
         result = runner.invoke(cli, ["align", "/nonexistent/path", str(tmp_path)])
         assert result.exit_code != 0
+
+    def test_timeline_command(self, tmp_path: Path) -> None:
+        """Test the timeline CLI command with mocked registration."""
+        from unittest.mock import MagicMock
+
+        # Create 3 scan directories.
+        rng = np.random.default_rng(42)
+        for name in ["scan_001", "scan_002", "scan_003"]:
+            d = tmp_path / "scans" / name
+            d.mkdir(parents=True, exist_ok=True)
+            pts = rng.uniform(0, 5, (100, 3))
+            np.save(d / "coord.npy", pts)
+
+        mock_result = MagicMock()
+        mock_result.transformation = np.eye(4)
+        mock_result.fitness = 0.9
+        mock_result.inlier_rmse = 0.01
+
+        out_json = tmp_path / "report.json"
+        chart_png = tmp_path / "progress.png"
+
+        runner = CliRunner()
+        with patch(
+            "construction_diff.timeline.register_scans", return_value=mock_result
+        ):
+            result = runner.invoke(
+                cli,
+                [
+                    "timeline",
+                    str(tmp_path / "scans"),
+                    "-o",
+                    str(out_json),
+                    "--chart",
+                    str(chart_png),
+                    "--voxel-size",
+                    "1.0",
+                ],
+            )
+
+        assert result.exit_code == 0, f"CLI failed: {result.output}"
+        assert "Discovered 3 scans" in result.output
+        assert out_json.exists()
+        assert chart_png.exists()
+
+    def test_timeline_too_few_scans(self, tmp_path: Path) -> None:
+        """Timeline should fail with fewer than 2 scans."""
+        d = tmp_path / "scans" / "only_one"
+        d.mkdir(parents=True, exist_ok=True)
+        np.save(d / "coord.npy", np.zeros((10, 3)))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["timeline", str(tmp_path / "scans")])
+        assert result.exit_code != 0
+        assert "at least 2" in result.output
