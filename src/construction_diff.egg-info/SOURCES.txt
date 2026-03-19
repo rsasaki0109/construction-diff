@@ -1,5 +1,8 @@
+.gitignore
+LICENSE
 README.md
 pyproject.toml
+.github/workflows/ci.yml
 src/construction_diff/__init__.py
 src/construction_diff/cli.py
 src/construction_diff/diff.py
@@ -12,3 +15,15 @@ src/construction_diff.egg-info/dependency_links.txt
 src/construction_diff.egg-info/entry_points.txt
 src/construction_diff.egg-info/requires.txt
 src/construction_diff.egg-info/top_level.txt
+src/construction_diff/__pycache__/__init__.cpython-312.pyc
+src/construction_diff/__pycache__/cli.cpython-312.pyc
+src/construction_diff/__pycache__/diff.cpython-312.pyc
+src/construction_diff/__pycache__/loader.cpython-312.pyc
+src/construction_diff/__pycache__/registration.cpython-312.pyc
+src/construction_diff/__pycache__/visualization.cpython-312.pyc
+tests/__init__.py
+tests/conftest.py
+tests/test_cli.py
+tests/test_diff.py
+tests/test_loader.py
+tests/test_registration.py
