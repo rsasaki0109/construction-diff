@@ -76,7 +76,8 @@ Points are colour-coded: **green** = new construction, **red** = removed/demolis
 - Global registration (FPFH + RANSAC) with ICP refinement using Open3D
 - Diff computation via KD-tree nearest-neighbour distance thresholding
 - Colour-coded visualisation: new (green), removed (red), unchanged (grey)
-- CLI with three subcommands: `align`, `diff`, `report`
+- **4D time-series monitoring** across arbitrary number of epochs (see below)
+- CLI with four subcommands: `align`, `diff`, `report`, `timeline`
 
 ## Installation
 
@@ -102,6 +103,74 @@ construction-diff diff /path/to/scan_t0 /path/to/scan_t1 -t transform.npy -o dif
 
 ```bash
 construction-diff report /path/to/scan_t0 /path/to/scan_t1 -o report.png
+```
+
+## 4D Construction Monitoring
+
+Traditional tools like CloudCompare M3C2 only perform **pairwise** comparison between two point clouds. `construction-diff timeline` goes further by tracking construction progress across an **arbitrary number of scan epochs**, computing cumulative metrics and progress rates over time.
+
+### How it works
+
+```
+ Scan t0     Scan t1     Scan t2     ...     Scan tN
+   |            |           |                   |
+   +----diff----+---diff----+--- ... ---diff----+
+   |            |           |                   |
+   v            v           v                   v
+  step 1      step 2     step 3    ...     step N-1
+```
+
+For each consecutive pair of scans the pipeline runs:
+1. FPFH + ICP registration to align the two epochs
+2. KD-tree diff to classify new / removed / unchanged points
+3. Aggregation into cumulative metrics and progress rates
+
+### Timeline chart
+
+The `timeline` command produces a three-panel chart:
+
+| Panel | Content |
+|-------|---------|
+| Top | Cumulative new points over time (construction progress proxy) |
+| Middle | Per-step bar chart of new (green) vs removed (red) points |
+| Bottom | Progress rate trend line (new points/hour) |
+
+### Usage
+
+```bash
+# Directory structure: scans/ contains subdirectories, one per epoch
+# Each subdirectory has coord.npy (and optionally color.npy, normal.npy)
+#
+# scans/
+#   2024-01-15/coord.npy
+#   2024-02-15/coord.npy
+#   2024-03-15/coord.npy
+
+construction-diff timeline scans/ --output report.json --chart progress.png
+```
+
+Scans are auto-discovered and sorted by directory name. Directory names are parsed as dates (YYYY-MM-DD, YYYYMMDD, YYYY_MM_DD) when possible; otherwise sequential timestamps are assigned.
+
+Output formats:
+- `--output report.json` -- JSON with all metrics (timestamps, per-step counts, cumulative, rates)
+- `--output report.csv` -- CSV table with one row per step
+- `--chart progress.png` -- matplotlib chart image
+
+### Python API
+
+```python
+from datetime import datetime
+from construction_diff.timeline import ConstructionTimeline
+from construction_diff.progress_chart import plot_progress
+
+tl = ConstructionTimeline(voxel_size=0.05, threshold=0.10)
+tl.add_scan("scans/2024-01-15", datetime(2024, 1, 15))
+tl.add_scan("scans/2024-02-15", datetime(2024, 2, 15))
+tl.add_scan("scans/2024-03-15", datetime(2024, 3, 15))
+
+report = tl.compute_progress()
+report.to_json("progress.json")
+plot_progress(report, "progress.png")
 ```
 
 ## Development

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -238,3 +239,124 @@ def report(
 
     if output is not None:
         click.echo(f"Report saved to {output}")
+
+
+@cli.command()
+@click.argument("scan_dir", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Save progress report as JSON or CSV (determined by extension).",
+)
+@click.option(
+    "--chart",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Save progress chart image (e.g. progress.png).",
+)
+@click.option(
+    "--threshold",
+    type=float,
+    default=0.10,
+    show_default=True,
+    help="Distance threshold (m) for classifying new/removed points.",
+)
+@click.option(
+    "--voxel-size",
+    type=float,
+    default=0.05,
+    show_default=True,
+    help="Voxel size for registration downsampling.",
+)
+@click.option("-v", "--verbose", is_flag=True, default=False, help="Verbose output.")
+def timeline(
+    scan_dir: Path,
+    output: Path | None,
+    chart: Path | None,
+    threshold: float,
+    voxel_size: float,
+    verbose: bool,
+) -> None:
+    """Run 4D time-series construction monitoring on a directory of scans.
+
+    SCAN_DIR should contain subdirectories, each representing one scan epoch.
+    Scans are sorted by directory name (alphabetical/timestamp order).
+    Each subdirectory must contain Rohbau3D .npy files (coord.npy, etc.).
+
+    This goes beyond pairwise M3C2 comparison by tracking cumulative
+    construction progress across an arbitrary number of epochs.
+    """
+    from datetime import datetime as dt
+
+    from construction_diff.timeline import ConstructionTimeline
+    from construction_diff.progress_chart import plot_progress
+
+    if verbose:
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    # Auto-discover scan subdirectories.
+    scan_dirs = sorted(
+        [d for d in scan_dir.iterdir() if d.is_dir() and (d / "coord.npy").exists()]
+    )
+
+    if len(scan_dirs) < 2:
+        raise click.ClickException(
+            f"Need at least 2 scan directories in {scan_dir}, "
+            f"found {len(scan_dirs)} with coord.npy"
+        )
+
+    click.echo(f"Discovered {len(scan_dirs)} scans in {scan_dir}")
+
+    tl = ConstructionTimeline(voxel_size=voxel_size, threshold=threshold)
+
+    for i, sd in enumerate(scan_dirs):
+        # Use directory name as a synthetic timestamp (epoch index).
+        # Try parsing the name as a date first, fall back to sequential.
+        timestamp = _parse_dir_timestamp(sd.name, fallback_index=i)
+        tl.add_scan(sd, timestamp)
+        click.echo(f"  [{i}] {sd.name} -> {timestamp.isoformat()}")
+
+    click.echo("Computing pairwise diffs...")
+    report = tl.compute_progress()
+
+    # Print summary.
+    for i in range(len(report.new_points_per_step)):
+        click.echo(
+            f"  Step {i + 1}: new={report.new_points_per_step[i]}, "
+            f"removed={report.removed_per_step[i]}, "
+            f"cumulative={report.cumulative_new[i]}"
+        )
+
+    # Save report.
+    if output is not None:
+        suffix = output.suffix.lower()
+        if suffix == ".csv":
+            report.to_csv(output)
+        else:
+            report.to_json(output)
+        click.echo(f"Report saved to {output}")
+
+    # Save chart.
+    if chart is not None:
+        plot_progress(report, chart)
+        click.echo(f"Chart saved to {chart}")
+
+
+def _parse_dir_timestamp(name: str, fallback_index: int) -> datetime:
+    """Try to parse a directory name as a date/datetime.
+
+    Supported formats: YYYY-MM-DD, YYYYMMDD, YYYY_MM_DD.
+    Falls back to 2000-01-01 + fallback_index days.
+    """
+    from datetime import datetime as dt, timedelta
+
+    for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y_%m_%d", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return dt.strptime(name, fmt)
+        except ValueError:
+            continue
+
+    # Fallback: use index-based synthetic timestamps (1 day apart).
+    return dt(2000, 1, 1) + timedelta(days=fallback_index)
