@@ -69,15 +69,25 @@ def align(
 
     SOURCE and TARGET are directories containing Rohbau3D .npy files.
     """
-    src_pcd = load_scan(source)
-    tgt_pcd = load_scan(target)
+    import time
 
+    click.echo(f"Loading source: {source} ...")
+    src_pcd = load_scan(source)
+    click.echo(f"  {len(src_pcd.points):,} points")
+    click.echo(f"Loading target: {target} ...")
+    tgt_pcd = load_scan(target)
+    click.echo(f"  {len(tgt_pcd.points):,} points")
+
+    click.echo("Registering ...")
+    t0 = time.monotonic()
     result = _run_registration(
         src_pcd, tgt_pcd, multi_scale=multi_scale, voxel_size=voxel_size, verbose=verbose
     )
+    elapsed = time.monotonic() - t0
 
     click.echo(f"Fitness:  {result.fitness:.4f}")
     click.echo(f"RMSE:     {result.inlier_rmse:.6f}")
+    click.echo(f"Time:     {elapsed:.1f}s")
 
     if output is not None:
         np.save(output, result.transformation)
